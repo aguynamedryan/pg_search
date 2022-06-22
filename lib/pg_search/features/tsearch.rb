@@ -7,7 +7,7 @@ module PgSearch
   module Features
     class TSearch < Feature # rubocop:disable Metrics/ClassLength
       def self.valid_options
-        super + %i[dictionary prefix negation any_word normalization tsvector_column highlight]
+        super + %i[dictionary prefix negation suffix any_word normalization tsvector_column highlight]
       end
 
       def conditions
@@ -113,14 +113,18 @@ module PgSearch
 
       # After this, the SQL expression evaluates to a string containing the term surrounded by single-quotes.
       # If :prefix is true, then the term will have :* appended to the end.
+      # If :suffix is true, then the term will be reversed and have :* appended to the end.
       # If :negated is true, then the term will have ! prepended to the front.
       def tsquery_expression(term_sql, negated:, prefix:)
+        suffix = options[:suffix]
+        term_sql = Arel::Nodes::NamedFunction.new("reverse", [term_sql]) if suffix
+
         terms = [
           (Arel::Nodes.build_quoted('!') if negated),
           Arel::Nodes.build_quoted("' "),
           term_sql,
           Arel::Nodes.build_quoted(" '"),
-          (Arel::Nodes.build_quoted(":*") if prefix)
+          (Arel::Nodes.build_quoted(":*") if prefix || suffix)
         ].compact
 
         terms.inject do |memo, term|
@@ -192,9 +196,12 @@ module PgSearch
       end
 
       def column_to_tsvector(search_column)
+        search_column_sql = Arel.sql(normalize(search_column.to_sql))
+        search_column_sql = Arel::Nodes::NamedFunction.new("reverse", [search_column_sql]) if options[:suffix]
+
         tsvector = Arel::Nodes::NamedFunction.new(
           "to_tsvector",
-          [dictionary, Arel.sql(normalize(search_column.to_sql))]
+          [dictionary, search_column_sql]
         ).to_sql
 
         if search_column.weight.nil?
