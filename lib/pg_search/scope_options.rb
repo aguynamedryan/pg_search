@@ -13,6 +13,19 @@ module PgSearch
     end
 
     def apply(scope)
+      if config.avoid_inner_join?
+        where_clause = scope.arel_table.grouping(conditions)
+        scope
+          .where(where_clause)
+          .order(Arel.sql("#{rank} DESC, #{order_within_rank}"))
+          .extend(WithPgSearchRank)
+          .extend(WithPgSearchHighlight[feature_for(:tsearch)])
+      else
+        original_apply(scope)
+      end
+    end
+
+    def original_apply(scope)
       scope = include_table_aliasing_for_rank(scope)
       rank_table_alias = scope.pg_search_rank_table_alias(include_counter: true)
 

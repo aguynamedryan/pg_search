@@ -645,6 +645,65 @@ describe "an Active Record model which includes PgSearch" do
         end
       end
 
+      context "with suffix: true and inner join avoided" do
+        before do
+          ModelWithPgSearch.pg_search_scope :search_title_with_suffixes,
+                                            against: :title,
+                                            avoid_inner_join: true,
+                                            using: {
+                                              tsearch: { suffix: true }
+                                            }
+        end
+
+        it "returns rows that match the query and that are suffixed by the query" do
+          included = ModelWithPgSearch.create!(title: 'suffix')
+          excluded = ModelWithPgSearch.create!(title: 'suffixes')
+
+          results = ModelWithPgSearch.search_title_with_suffixes("fix")
+          expect(results).to eq([included])
+          expect(results).not_to include(excluded)
+        end
+
+        it "returns rows that match the query when the query has a hyphen" do
+          included = ModelWithPgSearch.create!(title: 'foo-bar')
+          excluded = ModelWithPgSearch.create!(title: 'foo bar')
+
+          results = ModelWithPgSearch.search_title_with_suffixes("o-bar")
+          expect(results).to include(included)
+          expect(results).not_to include(excluded)
+        end
+      end
+
+      context "with inner join avoided in multiple scopes" do
+        before do
+          ModelWithPgSearch.pg_search_scope :search_title_with_suffixes,
+                                            against: :title,
+                                            avoid_inner_join: true,
+                                            using: {
+                                              tsearch: { suffix: true }
+                                            }
+
+          ModelWithPgSearch.pg_search_scope :search_title_with_prefixes,
+                                            against: :title,
+                                            avoid_inner_join: true,
+                                            using: {
+                                              tsearch: { prefix: true }
+                                            }
+        end
+
+        it "returns rows that match the chained queries" do
+          included = ModelWithPgSearch.create!(title: 'prefix')
+          excluded = [
+            ModelWithPgSearch.create!(title: 'suffix'),
+            ModelWithPgSearch.create!(title: 'suffixes')
+          ]
+
+          results = ModelWithPgSearch.search_title_with_prefixes("pre").search_title_with_suffixes("fix")
+          expect(results).to eq([included])
+          expect(results).not_to include(*excluded)
+        end
+      end
+
       context "with the english dictionary" do
         before do
           ModelWithPgSearch.pg_search_scope :search_content_with_english,
