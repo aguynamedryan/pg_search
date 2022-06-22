@@ -589,6 +589,7 @@ describe "an Active Record model which includes PgSearch" do
     end
 
     context "when using tsearch" do
+      context "with prefix: true" do
       before do
         ModelWithPgSearch.pg_search_scope :search_title_with_prefixes,
                                           against: :title,
@@ -597,7 +598,6 @@ describe "an Active Record model which includes PgSearch" do
                                           }
       end
 
-      context "with prefix: true" do
         it "returns rows that match the query and that are prefixed by the query" do
           included = ModelWithPgSearch.create!(title: 'prefix')
           excluded = ModelWithPgSearch.create!(title: 'postfix')
